@@ -15,7 +15,8 @@ type Context struct {
 	kratosCtx kratoshttp.Context
 	request   *http.Request
 	response  http.ResponseWriter
-	validator StructValidator // set by Router if WithValidator was used
+	validator StructValidator  // set by WithValidator
+	wrapper   ResponseWrapper  // set by WithResponseWrapper
 }
 
 // --- Request helpers ---
@@ -95,8 +96,12 @@ func (c *Context) JSON(code int, data any) error {
 	return json.NewEncoder(c.response).Encode(data)
 }
 
-// Success sends a 200 JSON response with the given data.
+// Success sends a 200 JSON response. If a ResponseWrapper is set on the
+// router, data is automatically wrapped (e.g., {code: 0, message: "ok", data: ...}).
 func (c *Context) Success(data any) error {
+	if c.wrapper != nil {
+		data = c.wrapper(data)
+	}
 	return c.JSON(http.StatusOK, data)
 }
 

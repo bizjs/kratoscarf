@@ -45,8 +45,11 @@ r.GET("/hello", func(ctx *router.Context) error {
 // 基本
 r := router.NewRouter(srv)
 
-// 带 validator (Gin 风格 auto-validate)
-r := router.NewRouter(srv, router.WithValidator(validation.New()))
+// 全功能 — 自动验证 + 自动响应包装 + 自动错误处理
+r := router.NewRouter(srv,
+    router.WithValidator(validation.New()),    // Bind() 自动验证
+    router.WithResponseWrapper(response.Wrap), // Success() 自动包装 {code, message, data}
+)
 ```
 
 ### 路由注册
@@ -94,6 +97,7 @@ Group 继承父路由的：
 - 路径前缀（拼接）
 - 中间件（追加）
 - Validator（继承）
+- ResponseWrapper（继承）
 
 ### 中间件
 
@@ -165,12 +169,16 @@ if err := ctx.BindQuery(&filter); err != nil {
 ### 响应写入
 
 ```go
-// JSON 响应
+// Success — 如果设置了 ResponseWrapper，自动包装
+ctx.Success(data)
+// 无 wrapper → {"id": 1, "title": "..."}
+// 有 wrapper → {"code": 0, "message": "ok", "data": {"id": 1, "title": "..."}}
+
+// JSON — 直接写，不走 wrapper（自定义状态码时使用）
 ctx.JSON(200, data)
 ctx.JSON(201, response.Success(todo))
 
-// 便捷方法
-ctx.Success(data)          // 等同于 ctx.JSON(200, data)
+// 其他
 ctx.NoContent()            // 204
 
 // 重定向
@@ -250,26 +258,45 @@ v1.RegisterUserServiceHTTPServer(httpSrv, userService)
 
 ## 与 response 包配合
 
-Router 不 import response。handler 中显式调用：
+Router 不 import response，通过 `WithResponseWrapper` 可选集成。
+
+### 推荐：设置 ResponseWrapper，handler 零包装代码
 
 ```go
-import "github.com/bizjs/kratoscarf/response"
+// 初始化
+r := router.NewRouter(srv,
+    router.WithResponseWrapper(response.Wrap),
+    router.WithValidator(validation.New()),
+)
 
+// Handler — 直接返回数据，自动包装
 func listTodos(ctx *router.Context) error {
-    // 统一响应格式
-    return ctx.Success(response.Success(todos))
+    return ctx.Success(todos)
     // → {"code": 0, "message": "ok", "data": [...]}
-}
-
-func createTodo(ctx *router.Context) error {
-    // 自定义状态码
-    return ctx.JSON(201, response.Success(todo))
 }
 
 func getTodo(ctx *router.Context) error {
     // 返回业务错误 — ErrorEncoder 自动处理
     return response.ErrNotFound.WithMessage("todo not found")
     // → HTTP 404 {"code": 40400, "message": "todo not found"}
+}
+
+func createTodo(ctx *router.Context) error {
+    // 自定义状态码 — 用 JSON() 绕过 wrapper
+    return ctx.JSON(201, response.Success(todo))
+}
+```
+
+### 不设置 ResponseWrapper
+
+`ctx.Success(data)` 直接输出 data 的 JSON，不包装：
+
+```go
+r := router.NewRouter(srv) // 无 wrapper
+
+func handler(ctx *router.Context) error {
+    return ctx.Success(map[string]string{"name": "alice"})
+    // → {"name": "alice"}
 }
 ```
 
@@ -302,3 +329,37 @@ ErrorEncoder 处理 (response.NewHTTPErrorEncoder)
 ```
 
 Handler 不需要自己写 JSON 错误响应，直接 `return err` 即可。
+
+## 类 NestJS 全自动拦截
+
+三个选项组合实现 NestJS 式的请求/响应自动处理：
+
+```go
+r := router.NewRouter(srv,
+    router.WithValidator(validation.New()),    // ≈ NestJS ValidationPipe
+    router.WithResponseWrapper(response.Wrap), // ≈ NestJS TransformInterceptor
+)
+// + kratoshttp.ErrorEncoder(response.NewHTTPErrorEncoder()) ≈ NestJS ExceptionFilter
+```
+
+| NestJS | kratoscarf | 效果 |
+|--------|-----------|------|
+| `ValidationPipe` | `WithValidator` | `ctx.Bind()` 自动验证，失败返回 422 |
+| `TransformInterceptor` | `WithResponseWrapper` | `ctx.Success()` 自动包装 `{code, message, data}` |
+| `HttpExceptionFilter` | `ErrorEncoder` | `return err` 自动格式化错误响应 |
+
+Handler 只需关注业务逻辑：
+
+```go
+func (s *Svc) Create(ctx *router.Context) error {
+    var req CreateRequest
+    if err := ctx.Bind(&req); err != nil {
+        return err              // 验证失败 → 422（自动）
+    }
+    todo, err := s.uc.Create(ctx.Context(), req.Title)
+    if err != nil {
+        return response.ErrInternal.WithCause(err) // 业务错误 → 500（自动）
+    }
+    return ctx.Success(todo)    // 成功 → 200 {code:0, data:...}（自动）
+}
+```
