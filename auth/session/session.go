@@ -129,6 +129,8 @@ func (m *Manager) GetSession(ctx context.Context, r *http.Request) (*Session, er
 			return nil, err
 		}
 		if sess != nil {
+			sess.IsNew = false
+			sess.Modified = false
 			return sess, nil
 		}
 	}
