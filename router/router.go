@@ -12,10 +12,13 @@ import (
 type HandlerFunc func(ctx *Context) error
 
 // StructValidator validates a struct. Implemented by validation.Validator.
-// Defined here as an interface so router does not import validation.
 type StructValidator interface {
 	Validate(any) error
 }
+
+// ResponseWrapper wraps response data before writing.
+// Typically a function that adds {code, message, data} envelope.
+type ResponseWrapper = func(data any) any
 
 // Router wraps Kratos HTTP Server routing with a friendlier API.
 type Router struct {
@@ -24,6 +27,7 @@ type Router struct {
 	prefix     string
 	middleware []kratosmiddleware.Middleware
 	validator  StructValidator
+	wrapper    ResponseWrapper
 }
 
 // NewRouter creates a new Router bound to a Kratos HTTP Server.
@@ -48,6 +52,12 @@ func WithValidator(v StructValidator) Option {
 	return func(r *Router) { r.validator = v }
 }
 
+// WithResponseWrapper sets a response wrapper for ctx.Success().
+// Pass response.Success to auto-wrap all responses in {code, message, data}.
+func WithResponseWrapper(w ResponseWrapper) Option {
+	return func(r *Router) { r.wrapper = w }
+}
+
 // Group creates a sub-router with a path prefix and optional middleware.
 func (r *Router) Group(prefix string, mws ...kratosmiddleware.Middleware) *Router {
 	combined := make([]kratosmiddleware.Middleware, 0, len(r.middleware)+len(mws))
@@ -59,6 +69,7 @@ func (r *Router) Group(prefix string, mws ...kratosmiddleware.Middleware) *Route
 		prefix:     r.prefix + prefix,
 		middleware: combined,
 		validator:  r.validator,
+		wrapper:    r.wrapper,
 	}
 }
 
@@ -102,10 +113,11 @@ func (r *Router) Handle(method, path string, h HandlerFunc) {
 	fullPath := r.prefix + path
 
 	v := r.validator // capture for closure
+	w := r.wrapper
 
 	if len(r.middleware) == 0 {
 		r.route.Handle(method, fullPath, func(ctx kratoshttp.Context) error {
-			return h(&Context{kratosCtx: ctx, request: ctx.Request(), response: ctx.Response(), validator: v})
+			return h(&Context{kratosCtx: ctx, request: ctx.Request(), response: ctx.Response(), validator: v, wrapper: w})
 		})
 		return
 	}
@@ -118,6 +130,7 @@ func (r *Router) Handle(method, path string, h HandlerFunc) {
 				request:   ctx.Request().WithContext(mwCtx),
 				response:  ctx.Response(),
 				validator: v,
+				wrapper:   w,
 			}
 			return nil, h(rc)
 		}
