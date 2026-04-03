@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package api.auth.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/bizjs/kratoscarf/examples/api/auth/v1;v1";
+
+// AuthService defines the auth API.
+service AuthService {
+  // JWT login — returns access + refresh token pair.
+  rpc JWTLogin(LoginRequest) returns (TokenPair) {
+    option (google.api.http) = {
+      post: "/jwt/login"
+      body: "*"
+    };
+  }
+
+  // JWT refresh — exchange refresh token for new pair.
+  rpc JWTRefresh(RefreshRequest) returns (TokenPair) {
+    option (google.api.http) = {
+      post: "/jwt/refresh"
+      body: "*"
+    };
+  }
+
+  // JWT profile — protected, requires Bearer token.
+  rpc JWTProfile(EmptyRequest) returns (ProfileReply) {
+    option (google.api.http) = {get: "/jwt/profile"};
+  }
+
+  // Session login — creates server-side session, sets cookie.
+  rpc SessionLogin(LoginRequest) returns (ProfileReply) {
+    option (google.api.http) = {
+      post: "/session/login"
+      body: "*"
+    };
+  }
+
+  // Session logout — destroys session.
+  rpc SessionLogout(EmptyRequest) returns (MessageReply) {
+    option (google.api.http) = {
+      post: "/session/logout"
+      body: "*"
+    };
+  }
+
+  // Session profile — protected, requires session cookie.
+  rpc SessionProfile(EmptyRequest) returns (ProfileReply) {
+    option (google.api.http) = {get: "/session/profile"};
+  }
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message EmptyRequest {}
+
+message TokenPair {
+  string access_token = 1;
+  string refresh_token = 2;
+  string expires_at = 3;
+}
+
+message ProfileReply {
+  string id = 1;
+  string username = 2;
+  string source = 3;
+}
+
+message MessageReply {
+  string message = 1;
+}

@@ -1,0 +1,14 @@
+server:
+  http:
+    addr: 0.0.0.0:8080
+    timeout: 5s
+
+auth:
+  jwt:
+    secret: "auth-app-demo-secret-change-me"
+    issuer: "auth-app"
+    accessExpiry: "15m"
+    refreshExpiry: "168h"
+  session:
+    maxAge: "24h"
+    cookieName: "auth_app_sid"
