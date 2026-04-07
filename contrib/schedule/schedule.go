@@ -56,6 +56,10 @@ func (s *Scheduler) AddInterval(name string, interval time.Duration, fn func(ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if interval <= 0 {
+		return fmt.Errorf("schedule: interval must be positive, got %s", interval)
+	}
+
 	if err := s.checkName(name); err != nil {
 		return err
 	}

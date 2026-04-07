@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 )
@@ -51,11 +52,11 @@ func Secure(cfg SecureConfig) kratoshttp.FilterFunc {
 			}
 
 			if cfg.HSTSMaxAge > 0 {
-				v := "max-age=" + http.StatusText(0) // placeholder
+				var v string
 				if cfg.HSTSIncludeSubDomains {
-					v = "max-age=" + itoa(cfg.HSTSMaxAge) + "; includeSubDomains"
+					v = "max-age=" + strconv.Itoa(cfg.HSTSMaxAge) + "; includeSubDomains"
 				} else {
-					v = "max-age=" + itoa(cfg.HSTSMaxAge)
+					v = "max-age=" + strconv.Itoa(cfg.HSTSMaxAge)
 				}
 				h.Set("Strict-Transport-Security", v)
 			}
@@ -63,18 +64,4 @@ func Secure(cfg SecureConfig) kratoshttp.FilterFunc {
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	buf := [20]byte{}
-	i := len(buf)
-	for n > 0 {
-		i--
-		buf[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(buf[i:])
 }
