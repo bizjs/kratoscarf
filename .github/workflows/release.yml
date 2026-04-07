@@ -40,22 +40,12 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-      - name: Update contrib/auth/redis go.mod
-        run: |
-          cd contrib/auth/redis
-          # Remove replace directive
-          sed -i '/^replace github.com\/bizjs\/kratoscarf/d' go.mod
-          # Update version
-          go mod edit -require github.com/bizjs/kratoscarf@v${{ inputs.version }}
-          go mod tidy
-
-      - name: Commit release changes
+      - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          # Only commit if there are changes
-          git diff --staged --quiet || git commit -m "release: v${{ inputs.version }}"
+
+      # --- Phase 1: Tag and publish root module ---
 
       - name: Generate changelog
         uses: orhun/git-cliff-action@v4
@@ -64,38 +54,57 @@ jobs:
           config: cliff.toml
           args: --latest --strip header
 
-      - name: Create tags
-        run: |
-          git tag "v${{ inputs.version }}"
-          git tag "contrib/auth/redis/v${{ inputs.version }}"
-          git tag "contrib/schedule/v${{ inputs.version }}"
+      - name: Tag root module
+        run: git tag "v${{ inputs.version }}"
 
-      - name: Push
+      - name: Push root tag
         run: |
           git push origin HEAD
           git push origin "v${{ inputs.version }}"
+
+      - name: Index root module on Go proxy
+        run: |
+          GOPROXY=https://proxy.golang.org \
+          go list -m "github.com/bizjs/kratoscarf@v${{ inputs.version }}"
+
+      # --- Phase 2: Update and tag contrib modules ---
+
+      - name: Update contrib/auth/redis go.mod
+        run: |
+          cd contrib/auth/redis
+          sed -i '/^replace github.com\/bizjs\/kratoscarf/d' go.mod
+          go mod edit -require "github.com/bizjs/kratoscarf@v${{ inputs.version }}"
+          go mod tidy
+
+      - name: Commit contrib release
+        run: |
+          git add -A
+          git diff --staged --quiet || git commit -m "chore(release): update contrib deps to v${{ inputs.version }}"
+
+      - name: Tag contrib modules
+        run: |
+          git tag "contrib/auth/redis/v${{ inputs.version }}"
+          git tag "contrib/schedule/v${{ inputs.version }}"
+
+      - name: Push contrib
+        run: |
+          git push origin HEAD
           git push origin "contrib/auth/redis/v${{ inputs.version }}"
           git push origin "contrib/schedule/v${{ inputs.version }}"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ inputs.version }}
-          body: ${{ steps.changelog.outputs.content }}
-
-      - name: Trigger Go proxy indexing
+      - name: Index contrib modules on Go proxy
         run: |
-          GOPROXY=https://proxy.golang.org \
-          go list -m "github.com/bizjs/kratoscarf@v${{ inputs.version }}" || true
           GOPROXY=https://proxy.golang.org \
           go list -m "github.com/bizjs/kratoscarf/contrib/auth/redis@v${{ inputs.version }}" || true
           GOPROXY=https://proxy.golang.org \
           go list -m "github.com/bizjs/kratoscarf/contrib/schedule@v${{ inputs.version }}" || true
 
+      # --- Phase 3: Restore dev state and create release ---
+
       - name: Restore replace for development
         run: |
           cd contrib/auth/redis
-          go mod edit -replace github.com/bizjs/kratoscarf=../../../
+          go mod edit -replace "github.com/bizjs/kratoscarf=../../../"
           go mod tidy
 
       - name: Commit restore
@@ -103,3 +112,9 @@ jobs:
           git add -A
           git diff --staged --quiet || git commit -m "chore: restore replace for development"
           git push origin HEAD
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          body: ${{ steps.changelog.outputs.content }}
