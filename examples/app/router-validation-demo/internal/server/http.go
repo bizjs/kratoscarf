@@ -18,8 +18,8 @@ func NewHTTPServer(c *conf.ServerConfig, todoSvc *service.TodoService) *kratosht
 	)
 
 	r := router.NewRouter(httpSrv,
-		router.WithValidator(validation.New()),        // Bind() auto-validates
-		router.WithResponseWrapper(response.Wrap),  // Success() auto-wraps {code, message, data}
+		router.WithValidator(validation.New()),    // Bind() auto-validates
+		router.WithResponseWrapper(response.Wrap), // Success() auto-wraps {code, message, data}
 	)
 	todoSvc.RegisterRoutes(r)
 

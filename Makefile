@@ -24,7 +24,6 @@ vet:
 # Format code
 fmt:
 	gofmt -w .
-	goimports -w -local github.com/bizjs/kratoscarf .
 
 # Tidy all go.mod files
 tidy:
