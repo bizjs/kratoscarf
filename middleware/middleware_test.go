@@ -76,9 +76,9 @@ func TestSecure_Defaults(t *testing.T) {
 
 	tests := map[string]string{
 		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":       "DENY",
-		"X-XSS-Protection":      "0",
-		"Referrer-Policy":       "strict-origin-when-cross-origin",
+		"X-Frame-Options":        "DENY",
+		"X-XSS-Protection":       "0",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
 	}
 	for header, expected := range tests {
 		if got := w.Header().Get(header); got != expected {

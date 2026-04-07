@@ -14,9 +14,9 @@ type Config struct {
 	CookieName string        `json:"cookieName" yaml:"cookieName"` // default: "session_id"
 	CookiePath string        `json:"cookiePath" yaml:"cookiePath"` // default: "/"
 	Domain     string        `json:"domain" yaml:"domain"`
-	Secure     bool          `json:"secure" yaml:"secure"`         // default: false
-	HTTPOnly   bool          `json:"httpOnly" yaml:"httpOnly"`     // default: true
-	SameSite   string        `json:"sameSite" yaml:"sameSite"`     // "lax" (default) | "strict" | "none"
+	Secure     bool          `json:"secure" yaml:"secure"`     // default: false
+	HTTPOnly   bool          `json:"httpOnly" yaml:"httpOnly"` // default: true
+	SameSite   string        `json:"sameSite" yaml:"sameSite"` // "lax" (default) | "strict" | "none"
 }
 
 // Session represents a server-side session.
@@ -70,14 +70,29 @@ type Manager struct {
 // Option configures the Manager.
 type Option func(*Manager)
 
-func WithMaxAge(d time.Duration) Option      { return func(m *Manager) { m.maxAge = d } }
-func WithCookieName(name string) Option      { return func(m *Manager) { m.cookieName = name } }
-func WithCookiePath(path string) Option      { return func(m *Manager) { m.cookiePath = path } }
-func WithCookieDomain(domain string) Option  { return func(m *Manager) { m.domain = domain } }
-func WithCookieSecure(secure bool) Option    { return func(m *Manager) { m.secure = secure } }
+// WithMaxAge sets the session max age.
+func WithMaxAge(d time.Duration) Option { return func(m *Manager) { m.maxAge = d } }
+
+// WithCookieName sets the session cookie name.
+func WithCookieName(name string) Option { return func(m *Manager) { m.cookieName = name } }
+
+// WithCookiePath sets the session cookie path.
+func WithCookiePath(path string) Option { return func(m *Manager) { m.cookiePath = path } }
+
+// WithCookieDomain sets the session cookie domain.
+func WithCookieDomain(domain string) Option { return func(m *Manager) { m.domain = domain } }
+
+// WithCookieSecure sets the session cookie Secure flag.
+func WithCookieSecure(secure bool) Option { return func(m *Manager) { m.secure = secure } }
+
+// WithCookieHTTPOnly sets the session cookie HttpOnly flag.
 func WithCookieHTTPOnly(httpOnly bool) Option { return func(m *Manager) { m.httpOnly = httpOnly } }
+
+// WithCookieSameSite sets the session cookie SameSite attribute.
 func WithCookieSameSite(s http.SameSite) Option { return func(m *Manager) { m.sameSite = s } }
-func WithIDGenerator(fn func() string) Option   { return func(m *Manager) { m.genID = fn } }
+
+// WithIDGenerator sets a custom session ID generator function.
+func WithIDGenerator(fn func() string) Option { return func(m *Manager) { m.genID = fn } }
 
 // NewManager creates a Manager.
 func NewManager(store Store, cfg Config, opts ...Option) *Manager {

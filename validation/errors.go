@@ -45,8 +45,8 @@ func (e ValidationErrors) ErrorData() any { return []FieldError(e) }
 // BindError wraps a binding failure with a 400 status code.
 type BindError struct{ Err error }
 
-func (e *BindError) Error() string  { return e.Err.Error() }
-func (e *BindError) Unwrap() error  { return e.Err }
+func (e *BindError) Error() string   { return e.Err.Error() }
+func (e *BindError) Unwrap() error   { return e.Err }
 func (e *BindError) HTTPStatus() int { return 400 }
 func (e *BindError) BizCode() int    { return 40000 }
 

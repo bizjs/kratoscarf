@@ -26,5 +26,5 @@ func writeReport(w http.ResponseWriter, report *HealthReport) {
 	if report.Status == StatusDown {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}
-	json.NewEncoder(w).Encode(report)
+	_ = json.NewEncoder(w).Encode(report)
 }
