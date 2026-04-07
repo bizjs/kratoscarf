@@ -4,9 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
+	"path/filepath"
+	"strings"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
 )
@@ -16,8 +21,8 @@ type Context struct {
 	kratosCtx kratoshttp.Context
 	request   *http.Request
 	response  http.ResponseWriter
-	validator StructValidator  // set by WithValidator
-	wrapper   ResponseWrapper  // set by WithResponseWrapper
+	validator StructValidator // set by WithValidator
+	wrapper   ResponseWrapper // set by WithResponseWrapper
 }
 
 // --- Request helpers ---
@@ -83,6 +88,39 @@ func (c *Context) BindQuery(dst any) error {
 		return c.validator.Validate(dst)
 	}
 	return nil
+}
+
+// QueryArray returns all values for a query parameter key.
+// Useful for repeated keys like ?ids=1&ids=2&ids=3.
+func (c *Context) QueryArray(key string) []string {
+	if c.request != nil {
+		return c.request.URL.Query()[key]
+	}
+	return nil
+}
+
+// ClientIP returns the client's real IP address, checking
+// X-Forwarded-For and X-Real-Ip headers before falling back to RemoteAddr.
+func (c *Context) ClientIP() string {
+	if c.request == nil {
+		return ""
+	}
+	if xff := c.request.Header.Get("X-Forwarded-For"); xff != "" {
+		ip, _, _ := strings.Cut(xff, ",")
+		return strings.TrimSpace(ip)
+	}
+	if xri := c.request.Header.Get("X-Real-Ip"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	// RemoteAddr is "ip:port" or "[ipv6]:port"
+	addr := c.request.RemoteAddr
+	if host, _, ok := strings.Cut(addr, "]:"); ok {
+		return strings.TrimPrefix(host, "[")
+	}
+	if host, _, ok := strings.Cut(addr, ":"); ok {
+		return host
+	}
+	return addr
 }
 
 // FormFile returns the first file for the given form key.
@@ -174,6 +212,101 @@ func (c *Context) Stream(contentType string, reader io.Reader) error {
 	c.response.WriteHeader(http.StatusOK)
 	_, err := io.Copy(c.response, reader)
 	return err
+}
+
+// String sends a plain text response with optional formatting.
+func (c *Context) String(code int, format string, values ...any) error {
+	if c.response == nil {
+		return errors.New("router: no response writer available")
+	}
+	c.response.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	c.response.WriteHeader(code)
+	if len(values) > 0 {
+		_, err := fmt.Fprintf(c.response, format, values...)
+		return err
+	}
+	_, err := io.WriteString(c.response, format)
+	return err
+}
+
+// Data sends raw bytes with the given content type and status code.
+func (c *Context) Data(code int, contentType string, data []byte) error {
+	if c.response == nil {
+		return errors.New("router: no response writer available")
+	}
+	c.response.Header().Set("Content-Type", contentType)
+	c.response.WriteHeader(code)
+	_, err := c.response.Write(data)
+	return err
+}
+
+// File sends a file as the response. The Content-Type is inferred from the filename.
+func (c *Context) File(filePath string) error {
+	if c.request == nil || c.response == nil {
+		return errors.New("router: no request/response available")
+	}
+	http.ServeFile(c.response, c.request, filePath)
+	return nil
+}
+
+// Attachment sends a file as a download with the given filename.
+func (c *Context) Attachment(filePath, filename string) error {
+	if c.response == nil {
+		return errors.New("router: no response writer available")
+	}
+	if filename == "" {
+		filename = filepath.Base(filePath)
+	}
+	c.response.Header().Set("Content-Disposition",
+		mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	return c.File(filePath)
+}
+
+// Inline sends a file for inline display with the given filename.
+func (c *Context) Inline(filePath, filename string) error {
+	if c.response == nil {
+		return errors.New("router: no response writer available")
+	}
+	if filename == "" {
+		filename = filepath.Base(filePath)
+	}
+	c.response.Header().Set("Content-Disposition",
+		mime.FormatMediaType("inline", map[string]string{"filename": filename}))
+	return c.File(filePath)
+}
+
+// ContentType returns the request's Content-Type (without parameters).
+func (c *Context) ContentType() string {
+	if c.request == nil {
+		return ""
+	}
+	ct := c.request.Header.Get("Content-Type")
+	mt, _, _ := mime.ParseMediaType(ct)
+	return mt
+}
+
+// QueryString returns the raw query string without '?'.
+func (c *Context) QueryString() string {
+	if c.request != nil {
+		return c.request.URL.RawQuery
+	}
+	return ""
+}
+
+// QueryValues returns all query parameters as url.Values.
+func (c *Context) QueryValues() url.Values {
+	if c.request != nil {
+		return c.request.URL.Query()
+	}
+	return nil
+}
+
+// FormValue returns a single form value by key (from POST body or query string).
+func (c *Context) FormValue(key string) string {
+	if c.request != nil {
+		return c.request.FormValue(key)
+	}
+	return ""
 }
 
 // --- Context passthrough ---

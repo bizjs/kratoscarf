@@ -32,7 +32,7 @@ func NewAuthService(
 }
 
 func (s *AuthService) JWTAuth() *authjwt.Authenticator { return s.jwtAuth }
-func (s *AuthService) SessionMgr() *session.Manager     { return s.sessMgr }
+func (s *AuthService) SessionMgr() *session.Manager    { return s.sessMgr }
 
 // ---------------------------------------------------------------------------
 // JWT

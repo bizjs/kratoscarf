@@ -2,7 +2,6 @@ package jwt
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"time"
 
@@ -40,9 +39,20 @@ type TokenStore interface {
 	Delete(ctx context.Context, token string) error
 }
 
+// authError is a sentinel error that carries HTTP status for the response encoder.
+type authError struct {
+	msg      string
+	httpCode int
+	bizCode  int
+}
+
+func (e *authError) Error() string   { return e.msg }
+func (e *authError) HTTPStatus() int { return e.httpCode }
+func (e *authError) BizCode() int    { return e.bizCode }
+
 var (
 	// ErrNoToken is returned when no token is found in the request.
-	ErrNoToken = errors.New("auth: no token found")
+	ErrNoToken error = &authError{msg: "auth: no token found", httpCode: http.StatusUnauthorized, bizCode: 40100}
 	// ErrInvalidAuthHeader is returned when the Authorization header is malformed.
-	ErrInvalidAuthHeader = errors.New("auth: invalid authorization header")
+	ErrInvalidAuthHeader error = &authError{msg: "auth: invalid authorization header", httpCode: http.StatusUnauthorized, bizCode: 40100}
 )

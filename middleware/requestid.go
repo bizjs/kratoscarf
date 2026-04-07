@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"regexp"
 
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport"
@@ -12,6 +13,8 @@ import (
 type requestIDKey struct{}
 
 const headerXRequestID = "X-Request-Id"
+
+var validRequestID = regexp.MustCompile(`^[a-zA-Z0-9\-]{1,128}$`)
 
 // RequestIDFromContext returns the request ID from context, or empty string if not set.
 func RequestIDFromContext(ctx context.Context) string {
@@ -36,7 +39,7 @@ func RequestID() middleware.Middleware {
 			}
 
 			id := ht.Request().Header.Get(headerXRequestID)
-			if id == "" {
+			if !validRequestID.MatchString(id) {
 				id = uuid.New().String()
 			}
 

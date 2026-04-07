@@ -22,6 +22,8 @@ type SecureConfig struct {
 	HSTSMaxAge int
 	// HSTSIncludeSubDomains adds includeSubDomains to HSTS. Default: false.
 	HSTSIncludeSubDomains bool
+	// PermissionsPolicy sets Permissions-Policy. Default: empty (restrictive "()").
+	PermissionsPolicy string
 }
 
 // Secure returns an HTTP filter that sets security response headers.
@@ -45,7 +47,12 @@ func Secure(cfg SecureConfig) kratoshttp.FilterFunc {
 			h := w.Header()
 			h.Set("X-Content-Type-Options", cfg.XContentTypeOptions)
 			h.Set("X-Frame-Options", cfg.XFrameOptions)
+			h.Set("X-XSS-Protection", "0")
 			h.Set("Referrer-Policy", cfg.ReferrerPolicy)
+
+			if cfg.PermissionsPolicy != "" {
+				h.Set("Permissions-Policy", cfg.PermissionsPolicy)
+			}
 
 			if cfg.ContentSecurityPolicy != "" {
 				h.Set("Content-Security-Policy", cfg.ContentSecurityPolicy)

@@ -76,17 +76,20 @@ func TestSecure_Defaults(t *testing.T) {
 
 	tests := map[string]string{
 		"X-Content-Type-Options": "nosniff",
-		"X-Frame-Options":       "DENY",
-		"Referrer-Policy":       "strict-origin-when-cross-origin",
+		"X-Frame-Options":        "DENY",
+		"X-XSS-Protection":       "0",
+		"Referrer-Policy":        "strict-origin-when-cross-origin",
 	}
 	for header, expected := range tests {
 		if got := w.Header().Get(header); got != expected {
 			t.Errorf("%s: expected %q, got %q", header, expected, got)
 		}
 	}
-	// HSTS should not be set by default
-	if got := w.Header().Get("Strict-Transport-Security"); got != "" {
-		t.Errorf("HSTS should not be set by default, got %q", got)
+	// HSTS and Permissions-Policy should not be set by default
+	for _, header := range []string{"Strict-Transport-Security", "Permissions-Policy"} {
+		if got := w.Header().Get(header); got != "" {
+			t.Errorf("%s should not be set by default, got %q", header, got)
+		}
 	}
 }
 
