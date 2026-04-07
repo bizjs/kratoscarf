@@ -64,8 +64,15 @@ jobs:
 
       - name: Index root module on Go proxy
         run: |
-          GOPROXY=https://proxy.golang.org \
-          go list -m "github.com/bizjs/kratoscarf@v${{ inputs.version }}"
+          for i in 1 2 3 4 5; do
+            if GOPROXY=https://proxy.golang.org go list -m "github.com/bizjs/kratoscarf@v${{ inputs.version }}"; then
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "::error::Failed to index root module after 5 attempts"
+          exit 1
 
       # --- Phase 2: Update and tag contrib modules ---
 
