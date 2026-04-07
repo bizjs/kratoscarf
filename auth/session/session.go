@@ -187,6 +187,8 @@ func (m *Manager) DestroySession(ctx context.Context, w http.ResponseWriter, r *
 
 func generateID() string {
 	b := make([]byte, 32)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("session: crypto/rand failed: " + err.Error())
+	}
 	return hex.EncodeToString(b)
 }

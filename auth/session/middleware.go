@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"net/http"
+	"path"
 
 	kratosmiddleware "github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport"
@@ -20,7 +21,7 @@ type middlewareConfig struct {
 func WithSkipPaths(paths ...string) MiddlewareOption {
 	return func(c *middlewareConfig) {
 		for _, p := range paths {
-			c.skipPaths[p] = true
+			c.skipPaths[path.Clean("/"+p)] = true
 		}
 	}
 }
@@ -55,7 +56,7 @@ func Middleware(manager *Manager, opts ...MiddlewareOption) kratosmiddleware.Mid
 				return handler(ctx, req)
 			}
 
-			if cfg.skipPaths[httpReq.URL.Path] {
+			if cfg.skipPaths[path.Clean("/"+httpReq.URL.Path)] {
 				return handler(ctx, req)
 			}
 
@@ -69,7 +70,9 @@ func Middleware(manager *Manager, opts ...MiddlewareOption) kratosmiddleware.Mid
 
 			if sess.Modified || sess.IsNew {
 				if w, ok := responseWriter(ctx); ok {
-					_ = manager.SaveSession(ctx, w, sess)
+					if saveErr := manager.SaveSession(ctx, w, sess); saveErr != nil {
+						return nil, saveErr
+					}
 				}
 			}
 

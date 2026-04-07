@@ -2,6 +2,7 @@ package jwt
 
 import (
 	"context"
+	"path"
 
 	"github.com/go-kratos/kratos/v2/middleware"
 	"github.com/go-kratos/kratos/v2/transport"
@@ -29,7 +30,7 @@ func WithExtractor(e TokenExtractor) MiddlewareOption {
 func WithSkipPaths(paths ...string) MiddlewareOption {
 	return func(c *middlewareConfig) {
 		for _, p := range paths {
-			c.skipPaths[p] = true
+			c.skipPaths[cleanPath(p)] = true
 		}
 	}
 }
@@ -39,6 +40,11 @@ func WithErrorHandler(fn func(ctx context.Context, err error) error) MiddlewareO
 	return func(c *middlewareConfig) {
 		c.errorHandler = fn
 	}
+}
+
+// cleanPath normalizes a URL path for consistent skip-path matching.
+func cleanPath(p string) string {
+	return path.Clean("/" + p)
 }
 
 // Middleware returns a Kratos middleware that validates tokens and injects Claims into context.
@@ -56,8 +62,8 @@ func Middleware(authenticator *Authenticator, opts ...MiddlewareOption) middlewa
 			// Extract path from transport info for skip-path check.
 			if tr, ok := transport.FromServerContext(ctx); ok {
 				if ht, ok := tr.(*kratoshttp.Transport); ok {
-					path := ht.Request().URL.Path
-					if cfg.skipPaths[path] {
+					reqPath := cleanPath(ht.Request().URL.Path)
+					if cfg.skipPaths[reqPath] {
 						return handler(ctx, req)
 					}
 

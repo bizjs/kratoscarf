@@ -2,10 +2,13 @@ package jwt
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	gojwt "github.com/golang-jwt/jwt/v5"
 )
+
+const minSecretLength = 32
 
 // Config holds JWT-specific configuration.
 type Config struct {
@@ -43,7 +46,12 @@ func WithClaimsFactory(fn func() Claims) Option {
 }
 
 // New creates a new JWT Authenticator with the given configuration.
-func New(cfg Config, opts ...Option) *Authenticator {
+// Returns an error if the secret is shorter than 32 bytes.
+func New(cfg Config, opts ...Option) (*Authenticator, error) {
+	if len(cfg.Secret) < minSecretLength {
+		return nil, fmt.Errorf("jwt: secret must be at least %d bytes, got %d", minSecretLength, len(cfg.Secret))
+	}
+
 	a := &Authenticator{
 		cfg:           cfg,
 		signingMethod: gojwt.SigningMethodHS256,
@@ -66,7 +74,7 @@ func New(cfg Config, opts ...Option) *Authenticator {
 	for _, opt := range opts {
 		opt(a)
 	}
-	return a
+	return a, nil
 }
 
 func (a *Authenticator) GenerateTokenPair(ctx context.Context, claims Claims) (*TokenPair, error) {
@@ -110,6 +118,9 @@ func (a *Authenticator) GenerateTokenPair(ctx context.Context, claims Claims) (*
 func (a *Authenticator) ValidateToken(ctx context.Context, tokenString string) (*Claims, error) {
 	claims := a.claimsFactory()
 	token, err := gojwt.ParseWithClaims(tokenString, &claims, func(token *gojwt.Token) (any, error) {
+		if token.Method.Alg() != a.signingMethod.Alg() {
+			return nil, fmt.Errorf("jwt: unexpected signing method: %v", token.Header["alg"])
+		}
 		return []byte(a.cfg.Secret), nil
 	})
 	if err != nil {
@@ -137,6 +148,12 @@ func (a *Authenticator) RefreshToken(ctx context.Context, refreshToken string) (
 	if err != nil {
 		return nil, err
 	}
+
+	// Revoke old refresh token to prevent replay.
+	if err := a.RevokeToken(ctx, refreshToken); err != nil {
+		return nil, err
+	}
+
 	return a.GenerateTokenPair(ctx, *claims)
 }
 

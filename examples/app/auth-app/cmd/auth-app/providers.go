@@ -11,7 +11,7 @@ func provideServerConfig(bc *conf.Bootstrap) *conf.ServerConfig {
 	return &bc.Server
 }
 
-func provideJWTAuthenticator(bc *conf.Bootstrap) *authjwt.Authenticator {
+func provideJWTAuthenticator(bc *conf.Bootstrap) (*authjwt.Authenticator, error) {
 	return authjwt.New(authjwt.Config{
 		Secret:        bc.Auth.JWT.Secret,
 		Issuer:        bc.Auth.JWT.Issuer,
