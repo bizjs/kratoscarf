@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 
 	kratoshttp "github.com/go-kratos/kratos/v2/transport/http"
@@ -82,6 +83,28 @@ func (c *Context) BindQuery(dst any) error {
 		return c.validator.Validate(dst)
 	}
 	return nil
+}
+
+// FormFile returns the first file for the given form key.
+func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
+	if c.request == nil {
+		return nil, errors.New("router: no request available")
+	}
+	_, fh, err := c.request.FormFile(name)
+	return fh, err
+}
+
+// MultipartForm parses the request as multipart form data with the given max memory.
+// Remaining file data is stored in temporary files. The caller does not need to call
+// r.Body.Close(), but should eventually remove temp files via r.MultipartForm.RemoveAll().
+func (c *Context) MultipartForm(maxMemory int64) (*multipart.Form, error) {
+	if c.request == nil {
+		return nil, errors.New("router: no request available")
+	}
+	if err := c.request.ParseMultipartForm(maxMemory); err != nil {
+		return nil, err
+	}
+	return c.request.MultipartForm, nil
 }
 
 // --- Response helpers ---
