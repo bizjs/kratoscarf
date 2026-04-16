@@ -60,7 +60,7 @@ func BenchmarkErrorToResponse_BizError(b *testing.B) {
 	err := ErrNotFound.WithMessage("user not found")
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = errorToResponse(err)
+		_ = ErrorToResponse(err)
 	}
 }
 
@@ -68,7 +68,7 @@ func BenchmarkErrorToResponse_DuckTyped(b *testing.B) {
 	err := &duckError{status: 422, code: 42200}
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = errorToResponse(err)
+		_ = ErrorToResponse(err)
 	}
 }
 
@@ -85,7 +85,7 @@ func BenchmarkErrorToResponse_PlainError(b *testing.B) {
 	err := errors.New("something went wrong")
 	b.ReportAllocs()
 	for b.Loop() {
-		_ = errorToResponse(err)
+		_ = ErrorToResponse(err)
 	}
 }
 
@@ -162,6 +162,32 @@ func BenchmarkNewHTTPResponseEncoder_FullPipeline(b *testing.B) {
 			r := httptest.NewRequest("GET", "/", nil)
 			_ = encoder(w, r, p)
 		}
+	}
+}
+
+func BenchmarkHTTPResponseEncoder_CustomWrapper(b *testing.B) {
+	encoder := NewHTTPResponseEncoder(WithSuccessWrapper(func(data any) any {
+		return map[string]any{"ok": true, "data": data}
+	}))
+	data := map[string]any{"id": 1, "name": "alice"}
+	b.ReportAllocs()
+	for b.Loop() {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+		_ = encoder(w, r, data)
+	}
+}
+
+func BenchmarkHTTPErrorEncoder_CustomWrapper(b *testing.B) {
+	encoder := NewHTTPErrorEncoder(WithErrorWrapper(func(err error) any {
+		return map[string]any{"ok": false, "error": err.Error()}
+	}))
+	err := ErrNotFound.WithMessage("not found")
+	b.ReportAllocs()
+	for b.Loop() {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/", nil)
+		encoder(w, r, err)
 	}
 }
 

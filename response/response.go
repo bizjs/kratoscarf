@@ -32,7 +32,7 @@ func Wrap(data any) any {
 }
 
 // Error creates an error response from an error.
-// Delegates to errorToResponse for duck-typed interface support.
+// Delegates to ErrorToResponse for duck-typed interface support.
 func Error(err error) *Response {
-	return errorToResponse(err)
+	return ErrorToResponse(err)
 }
