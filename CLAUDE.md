@@ -27,7 +27,7 @@ kratoscarf/
 ├── response/                   # 统一响应与错误协议
 │   ├── response.go             # Response, Success, Wrap, Error
 │   ├── errors.go               # BizError, 预定义错误(ErrNotFound等), IsBizError, FromKratosError
-│   ├── encoder.go              # NewHTTPResponseEncoder, NewHTTPErrorEncoder (鸭子类型识别)
+│   ├── encoder.go              # NewHTTPResponseEncoder(WithSuccessWrapper), NewHTTPErrorEncoder(WithErrorWrapper), ErrorToResponse
 │   └── pagination.go           # PageRequest/Response[T], CursorRequest/Response[T]
 ├── validation/                 # 请求验证（go-playground/validator 封装）
 │   ├── validation.go           # Validator, New, Struct, Var, Validate, WithRule, WithRuleFunc, WithTagName
@@ -113,9 +113,9 @@ r := router.NewRouter(srv,
 
 ### Kratos 集成注意事项
 
-- `srv.Route("/").GET()` 注册的 handler **不走** Kratos server-level middleware
-- proto 生成的 handler 通过 `ctx.Middleware()` 触发 server middleware（Kratos 内部机制）
-- kratoscarf router 的 `Group(prefix, middleware...)` 和 `Use(middleware)` 正确链接 Kratos middleware
+- `srv.Route("/").GET()` 注册的 handler **不走** Kratos server-level middleware（Kratos 原生行为）
+- kratoscarf router 的 `Handle()` 通过 `ctx.Middleware()` 自动接入 server-level middleware，与 proto 生成的 handler 行为一致
+- kratoscarf router 支持两层中间件：server-level（recovery/logging/tracing）+ route-level（`Use()`/`Group()`注册的 JWT/RBAC 等）
 - Session middleware 的 auto-save 在 kratoscarf router 中不生效（transport context 分离），login 需要显式 `SaveSession`
 
 ### 错误处理规范

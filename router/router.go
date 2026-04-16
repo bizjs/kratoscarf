@@ -115,14 +115,6 @@ func (r *Router) Handle(method, path string, h HandlerFunc) {
 	v := r.validator // capture for closure
 	w := r.wrapper
 
-	if len(r.middleware) == 0 {
-		r.route.Handle(method, fullPath, func(ctx kratoshttp.Context) error {
-			return h(&Context{kratosCtx: ctx, request: ctx.Request(), response: ctx.Response(), validator: v, wrapper: w})
-		})
-		return
-	}
-
-	// Wrap handler with the middleware chain.
 	r.route.Handle(method, fullPath, func(ctx kratoshttp.Context) error {
 		var inner kratosmiddleware.Handler = func(mwCtx context.Context, _ any) (any, error) {
 			rc := &Context{
@@ -135,8 +127,14 @@ func (r *Router) Handle(method, path string, h HandlerFunc) {
 			return nil, h(rc)
 		}
 
-		chain := kratosmiddleware.Chain(r.middleware...)(inner)
-		_, err := chain(ctx.Request().Context(), nil)
+		// Route-level middleware (JWT, RBAC, etc.)
+		if len(r.middleware) > 0 {
+			inner = kratosmiddleware.Chain(r.middleware...)(inner)
+		}
+
+		// Server-level middleware (recovery, logging, tracing, metrics)
+		// via ctx.Middleware() — matches how protobuf-generated handlers work.
+		_, err := ctx.Middleware(inner)(ctx.Request().Context(), nil)
 		return err
 	})
 }

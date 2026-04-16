@@ -231,14 +231,25 @@ func myHandler(ctx *router.Context) error {
 }
 ```
 
-### 已知限制
+### Server-level 中间件
 
-**Kratos server-level 中间件不会自动传播到 route handler。** 这是 Kratos 的设计 — transport context 和 request context 是分离的。
+kratoscarf router 通过 `ctx.Middleware()` 自动接入 Kratos server-level 中间件（recovery、logging、tracing、metrics 等），行为与 protobuf 生成的 handler 一致。
 
-解决方案：
-- 使用 `r.Group("/path", middleware)` 通过 router 挂载中间件（推荐）
-- 使用 `r.Use(middleware)` 全局挂载
-- 如果使用 proto 生成的 handler，用 Kratos 原生 `http.Middleware()` 注册
+```go
+httpSrv := kratoshttp.NewServer(
+    kratoshttp.Middleware(recovery, logging, tracing), // server-level
+)
+
+r := router.NewRouter(httpSrv)
+r.Use(jwtMiddleware)                                   // route-level
+
+// 执行顺序：server middleware → route middleware → handler
+r.GET("/api/users", listUsers)
+```
+
+两层中间件可以同时使用，互不冲突：
+- **Server-level**（`kratoshttp.Middleware(...)`）— 全局基础设施：recovery、logging、tracing、metrics
+- **Route-level**（`r.Use(...)` / `r.Group(..., mw)`）— 业务逻辑：JWT、RBAC、幂等性
 
 ## 与 Kratos 原生路由共存
 
