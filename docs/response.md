@@ -158,6 +158,30 @@ func (s *Svc) GetUser(ctx context.Context, req *v1.GetUserRequest) (*v1.User, er
 // → {"code": 0, "message": "ok", "data": {"name": "alice"}}
 ```
 
+#### 自定义成功响应结构
+
+通过 `WithSuccessWrapper` 替换默认的 `{code, message, data}` 信封。签名与 `router.WithResponseWrapper` 一致（`func(data any) any`），可传同一个函数：
+
+```go
+myWrapper := func(data any) any {
+    return map[string]any{"success": true, "result": data}
+}
+
+httpSrv := kratoshttp.NewServer(
+    kratoshttp.ResponseEncoder(response.NewHTTPResponseEncoder(
+        response.WithSuccessWrapper(myWrapper),
+    )),
+)
+// proto handler 返回 → {"success": true, "result": {"name": "alice"}}
+
+r := router.NewRouter(httpSrv,
+    router.WithResponseWrapper(myWrapper), // 同一个函数，两处复用
+)
+// ctx.Success(data) → 同样的信封结构
+```
+
+不传 `WithSuccessWrapper` 时行为与之前完全一致（默认 `response.Success`）。
+
 ### ErrorEncoder — 错误响应
 
 将 handler 返回的 error 格式化为统一响应，支持三种错误识别方式：
@@ -176,6 +200,44 @@ httpSrv := kratoshttp.NewServer(
 3. BizCode() int    → 鸭子类型业务码
 4. ErrorData() any  → 鸭子类型结构化数据
 5. 其他 error       → 500 "internal server error"（不泄露内部信息）
+```
+
+#### 自定义错误响应结构
+
+通过 `WithErrorWrapper` 替换默认的错误信封。可在自定义函数内调用 `ErrorToResponse(err)` 复用默认的鸭子类型解析逻辑：
+
+```go
+httpSrv := kratoshttp.NewServer(
+    kratoshttp.ErrorEncoder(response.NewHTTPErrorEncoder(
+        response.WithErrorWrapper(func(err error) any {
+            resp := response.ErrorToResponse(err) // 复用鸭子类型逻辑
+            return map[string]any{
+                "success": false,
+                "error":   resp.Message,
+                "code":    resp.Code,
+            }
+        }),
+    )),
+)
+// BizError → {"success": false, "error": "not found", "code": 40400}
+```
+
+HTTP 状态码始终由鸭子类型决定（`BizError.HTTPCode` / `HTTPStatus()` 接口），不受 `WithErrorWrapper` 影响。
+
+不传 `WithErrorWrapper` 时行为与之前完全一致。
+
+### ErrorToResponse — 导出的错误转换
+
+`ErrorToResponse(err error) *Response` 将 error 通过鸭子类型转换为 `*Response`。主要用途：
+
+- 在 `WithErrorWrapper` 自定义函数中复用默认解析逻辑
+- 在需要手动构造错误响应的场景中使用
+
+```go
+resp := response.ErrorToResponse(err)
+// resp.Code    — 业务码（BizError.Code 或 BizCode() 鸭子类型）
+// resp.Message — 消息
+// resp.Data    — 结构化数据（ErrorData() 鸭子类型）
 ```
 
 ### 鸭子类型协议

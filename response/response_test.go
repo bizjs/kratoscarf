@@ -388,7 +388,7 @@ func (e *duckFullError) ErrorData() any  { return e.data }
 
 func TestErrorToResponseWithBizCode(t *testing.T) {
 	err := &duckBizCodeError{code: 42200}
-	resp := errorToResponse(err)
+	resp := ErrorToResponse(err)
 
 	if resp.Code != 42200 {
 		t.Errorf("expected code 42200, got %d", resp.Code)
@@ -398,7 +398,7 @@ func TestErrorToResponseWithBizCode(t *testing.T) {
 func TestErrorToResponseWithErrorData(t *testing.T) {
 	fieldErrors := []string{"name is required", "email is invalid"}
 	err := &duckDataError{data: fieldErrors}
-	resp := errorToResponse(err)
+	resp := ErrorToResponse(err)
 
 	if resp.Data == nil {
 		t.Fatal("expected data to be set")
@@ -410,7 +410,7 @@ func TestErrorToResponseWithErrorData(t *testing.T) {
 
 func TestErrorToResponseWithBizCodeAndErrorData(t *testing.T) {
 	err := &duckFullError{status: 422, code: 42200, data: map[string]string{"field": "required"}}
-	resp := errorToResponse(err)
+	resp := ErrorToResponse(err)
 
 	if resp.Code != 42200 {
 		t.Errorf("expected code 42200, got %d", resp.Code)
@@ -533,6 +533,88 @@ func TestHTTPErrorEncoderPlainError(t *testing.T) {
 	}
 	if resp.Code != ErrInternal.Code {
 		t.Errorf("expected code %d, got %d", ErrInternal.Code, resp.Code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 9b. HTTP Encoders — Custom Wrappers
+// ---------------------------------------------------------------------------
+
+func TestHTTPResponseEncoderWithCustomWrapper(t *testing.T) {
+	customWrapper := func(data any) any {
+		return map[string]any{"success": true, "result": data}
+	}
+	encoder := NewHTTPResponseEncoder(WithSuccessWrapper(customWrapper))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	payload := map[string]string{"key": "value"}
+	if err := encoder(w, r, payload); err != nil {
+		t.Fatalf("encoder returned error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if m["success"] != true {
+		t.Errorf("expected success=true, got %v", m["success"])
+	}
+	if m["result"] == nil {
+		t.Error("expected result to be present")
+	}
+	// Default fields should NOT be present.
+	if _, ok := m["code"]; ok {
+		t.Error("expected no 'code' field with custom wrapper")
+	}
+}
+
+func TestHTTPErrorEncoderWithCustomWrapper(t *testing.T) {
+	customWrapper := func(err error) any {
+		defaultResp := ErrorToResponse(err)
+		return map[string]any{
+			"success":   false,
+			"errorCode": defaultResp.Code,
+			"detail":    defaultResp.Message,
+		}
+	}
+	encoder := NewHTTPErrorEncoder(WithErrorWrapper(customWrapper))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	encoder(w, r, ErrNotFound.WithMessage("item missing"))
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &m); err != nil {
+		t.Fatalf("json unmarshal failed: %v", err)
+	}
+	if m["success"] != false {
+		t.Errorf("expected success=false, got %v", m["success"])
+	}
+	if m["errorCode"] != float64(ErrNotFound.Code) {
+		t.Errorf("expected errorCode %d, got %v", ErrNotFound.Code, m["errorCode"])
+	}
+	if m["detail"] != "item missing" {
+		t.Errorf("expected detail 'item missing', got %v", m["detail"])
+	}
+}
+
+func TestHTTPErrorEncoderCustomWrapperHTTPStatusPreserved(t *testing.T) {
+	customWrapper := func(err error) any {
+		return map[string]any{"err": err.Error()}
+	}
+	encoder := NewHTTPErrorEncoder(WithErrorWrapper(customWrapper))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	encoder(w, r, &duckHTTPStatusError{status: http.StatusServiceUnavailable})
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status 503, got %d", w.Code)
 	}
 }
 
@@ -750,7 +832,7 @@ func TestBizErrorWithData(t *testing.T) {
 	be := NewBizError(422, 42200, "validation failed")
 	be.Data = map[string]string{"field": "name", "error": "required"}
 
-	resp := errorToResponse(be)
+	resp := ErrorToResponse(be)
 	if resp.Data == nil {
 		t.Fatal("expected data to be set from BizError.Data")
 	}
