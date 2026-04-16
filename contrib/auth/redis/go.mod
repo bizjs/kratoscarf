@@ -3,7 +3,7 @@ module github.com/bizjs/kratoscarf/contrib/auth/redis
 go 1.25.0
 
 require (
-	github.com/bizjs/kratoscarf v0.0.0
+	github.com/bizjs/kratoscarf v0.0.2
 	github.com/redis/go-redis/v9 v9.18.0
 )
 
@@ -24,5 +24,3 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/bizjs/kratoscarf => ../../../
